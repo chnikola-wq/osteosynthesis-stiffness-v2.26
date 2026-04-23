@@ -1557,7 +1557,7 @@
                                                         Single Plate Configuration
                                                     </h4>
                                                     <div className="text-xs font-bold mb-3 uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-2">
-                                                        {doublePlane180 === 'ML' ? 'AP Plane (bending about long edge)' : 'AP Plane (bending about short edge)'}
+                                                        AP Plane
                                                     </div>
                                                     <div className="mb-4">
                                                         <div className="flex flex-col mb-2">
@@ -1585,7 +1585,7 @@
                                                     </div>
 
                                                     <div className="text-xs font-bold mb-3 uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-2 mt-6">
-                                                        {doublePlane180 === 'ML' ? 'ML Plane (bending about short edge)' : 'ML Plane (bending about long edge)'}
+                                                        ML Plane
                                                     </div>
                                                     <div className="mb-4">
                                                         <div className="flex flex-col mb-2">
@@ -1978,7 +1978,7 @@
                                                         <InfoIcon /> The Working Length Paradox
                                                     </h4>
                                                     <p className="text-sm text-blue-900 dark:text-blue-200 leading-relaxed">
-                                                        Increasing the working length (<Latex math="L" />) makes the bridged construct more <strong>flexible</strong>. Under a constant axial load, a more flexible column deflects further, and that deflection <strong>adds to the geometric offset</strong> (<Latex math="e_{eff} = e + \\delta" />). The amplified offset multiplies the bending moment (<Latex math="M = P \\cdot e_{eff}" />), which lowers the load required to reach plate yield. So increasing <Latex math="L" /> <em>does</em> reduce the load to permanent bend &mdash; this is the P-Delta effect, and it is fully accounted for in the formula <Latex math={`P_{yield} = M_{max}/(e + M_{max}/P_{cr})`} />.
+                                                        Increasing the working length (<Latex math="L" />) makes the bridged construct more <strong>flexible</strong>. Under a constant axial load, a more flexible column deflects further, and that deflection (<Latex math="\\delta" />, the lateral midspan displacement of the column under load) <strong>adds to the geometric offset</strong> (<Latex math="e_{eff} = e + \\delta" />). The amplified offset multiplies the bending moment (<Latex math="M = P \\cdot e_{eff}" />), which lowers the load required to reach plate yield. So increasing <Latex math="L" /> <em>does</em> reduce the load to permanent bend &mdash; this is the P-Delta effect, and it is fully accounted for in the formula <Latex math={`P_{yield} = M_{max}/(e + M_{max}/P_{cr})`} />.
                                                         <br/><br/>
                                                         <strong>Why is the observed decrease so small?</strong> Because for typical clinical working lengths the construct sits deep in the regime <Latex math={`P_{cr} \\gg M_{max}/e`} />, where the flexibility term <Latex math={`M_{max}/P_{cr}`} /> is one to two orders of magnitude smaller than the geometric offset <Latex math="e" />. The denominator is dominated by <Latex math="e" />, so doubling <Latex math="L" /> (which quarters <Latex math={`P_{cr}`} />) only nudges <Latex math={`P_{yield}`} /> down by a few percent. The math is correct &mdash; the sensitivity is genuinely small in this regime, and grows sharply only as <Latex math="L" /> approaches the buckling threshold (see the Sensitivity block in the Math Report).
                                                         <br/><br/>

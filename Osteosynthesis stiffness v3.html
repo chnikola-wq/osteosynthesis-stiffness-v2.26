@@ -563,15 +563,30 @@
                 // --- Axial Load Resistance (bridging column) ---
                 // Physical model: the two-plate construct acts as a slender column across a working length L
                 // (span between innermost screws). Under a physiological axial load applied through the bone
-                // axis, two failure modes compete:
+                // axis, two failure modes compete and INTERACT:
                 //   (1) Euler column buckling of the composite double-plate cross-section about its weak axis.
-                //   (2) Yielding of the plates under the bending moment induced by the eccentricity between
-                //       the bone (load) axis and the construct centroid (M_induced = F_axial * e).
-                // The actual axial load to failure is the lesser of the two.
+                //   (2) Yielding of the plates under the bending moment induced by the eccentricity (e)
+                //       between the bone (load) axis and the construct centroid.
+                // Classical beam-column theory couples them: the axial load F bends the column by F*e, but
+                // that bending is amplified by the proximity to buckling as 1/(1 - F/P_cr). Setting the
+                // amplified bending moment equal to the plate's limit moment M_min gives
+                //     F_yield * e / (1 - F_yield / P_cr) = M_min
+                //  => F_yield = M_min / (e + M_min / P_cr).
+                // This expression reduces to the stubby-column limit (M_min/e) when P_cr is very large, and
+                // approaches P_cr when the column is very slender — and CRUCIALLY it varies with the working
+                // length L through P_cr. F_axial_fail equals F_yield (it is always <= P_cr by construction).
                 // E is provided in GPa; Euler needs MPa => multiply by 1000. Result in N, divided by 1000 for kN.
                 const K_end = (doubleEndCond === 'fixed') ? 0.5 : 1.0; // fixed-fixed vs pinned-pinned
                 const L_eff = Math.max(1, K_end * doubleL); // guard against L=0
                 const E_MPa = E_plate * 1000;
+
+                // Helper: amplified eccentric-yield load (beam-column interaction).
+                const eccentricYieldLoad = (M_min_Nm, e_mm, P_cr_N) => {
+                    const M_Nmm = M_min_Nm * 1000;
+                    const eSafe = Math.max(0.01, e_mm);
+                    const PcrSafe = Math.max(1, P_cr_N);
+                    return M_Nmm / (eSafe + M_Nmm / PcrSafe); // N
+                };
 
                 // 180 parallel: construct centroid is on the bone axis (0,0), each plate sits at offset d.
                 // A purely centric axial force therefore loads each plate as a column in compression AND
@@ -581,15 +596,15 @@
                 const P_cr_180 = (Math.pow(Math.PI, 2) * E_MPa * I_min_180) / Math.pow(L_eff, 2); // N
                 const e_180 = d; // mm, eccentricity from bone axis to each plate centroid
                 const M_gov_180_Nm = Math.min(M_xx_180, M_yy_180); // Nm (already in Nm)
-                const F_yield_180 = (M_gov_180_Nm * 1000) / Math.max(0.01, e_180); // N = (N*mm) / mm
-                const F_axial_fail_180 = Math.min(P_cr_180, F_yield_180); // N
+                const F_yield_180 = eccentricYieldLoad(M_gov_180_Nm, e_180, P_cr_180); // N (L-dependent)
+                const F_axial_fail_180 = Math.min(P_cr_180, F_yield_180); // N (== F_yield_180)
 
                 // 90 orthogonal: composite centroid sits off the bone axis by sqrt(cx^2 + cy^2).
                 const I_min_90 = Math.min(I_xx_90, I_yy_90);
                 const P_cr_90 = (Math.pow(Math.PI, 2) * E_MPa * I_min_90) / Math.pow(L_eff, 2); // N
                 const e_90 = Math.sqrt(Math.pow(cx_90, 2) + Math.pow(cy_90, 2)); // mm
                 const M_gov_90_Nm = Math.min(M_xx_90, M_yy_90); // Nm
-                const F_yield_90 = (M_gov_90_Nm * 1000) / Math.max(0.01, e_90); // N
+                const F_yield_90 = eccentricYieldLoad(M_gov_90_Nm, e_90, P_cr_90); // N (L-dependent)
                 const F_axial_fail_90 = Math.min(P_cr_90, F_yield_90); // N
 
                 // Convert to kN for display
@@ -600,9 +615,14 @@
                 const F_yield_90_kN = F_yield_90 / 1000;
                 const F_axial_fail_90_kN = F_axial_fail_90 / 1000;
 
-                // Governing mode tag for UI
-                const axial_mode_180 = (P_cr_180 <= F_yield_180) ? 'Buckling' : 'Plate Yield';
-                const axial_mode_90 = (P_cr_90 <= F_yield_90) ? 'Buckling' : 'Plate Yield';
+                // Governing mode tag for UI — compare the UN-amplified stub-column yield (M_min/e) against
+                // the pure Euler limit P_cr. If P_cr is the smaller of the two, slenderness dominates;
+                // otherwise eccentric plate yield dominates. (The displayed F_axial_fail uses the coupled
+                // amplified formula regardless, so it is always conservative.)
+                const F_yield_stub_180 = (M_gov_180_Nm * 1000) / Math.max(0.01, e_180); // N
+                const F_yield_stub_90 = (M_gov_90_Nm * 1000) / Math.max(0.01, e_90);   // N
+                const axial_mode_180 = (P_cr_180 <= F_yield_stub_180) ? 'Buckling' : 'Plate Yield';
+                const axial_mode_90 = (P_cr_90 <= F_yield_stub_90) ? 'Buckling' : 'Plate Yield';
 
                 // Axial compliance (pure metal crush), shown only as a lower-bound diagnostic.
                 const k_axial_180 = (2 * E_MPa * A) / Math.max(0.01, doubleL); // N/mm
@@ -1712,7 +1732,7 @@
                                                 Axial Load Resistance <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded">Working Length Required</span>
                                             </h2>
                                             <p className="text-xs text-slate-600 dark:text-slate-400 mb-5 leading-relaxed">
-                                                Under an axial load applied through the bone axis, the bridging construct can fail by <strong>column buckling</strong> (slender-column instability over the working length <Latex math="L" />) or by <strong>plate yield from eccentric bending</strong> (<Latex math={"M_{\\text{induced}} = F_{\\text{axial}} \\cdot e"} />, where <Latex math="e" /> is the offset between the bone axis and the construct centroid). The governing axial load to failure is the lesser of the two. <em>This block is purely diagnostic; bending and torsion remain the primary clinical stability metrics above.</em>
+                                                This block answers a single clinical question: <strong>"If the patient loads this limb in pure axial compression, how much weight can the bridged construct carry before something fails?"</strong> Because there is no bone contact across the gap, the two plates have to behave like a slender column. There are two ways that column can give way: it can <strong>bow out sideways</strong> (a buckling collapse, governed by the distance between your innermost screws — the working length <em>L</em>), or it can <strong>yield locally</strong> because the plates sit off to one side of the bone axis and every bit of axial load induces a bending moment in them. Longer working length, slimmer plates and less restrained end conditions all make both failure modes worse. <em>This panel is diagnostic — bending and torsion above remain the primary clinical stability metrics.</em>
                                             </p>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 {/* 180 Axial */}
@@ -1722,22 +1742,25 @@
                                                     </h4>
                                                     <div className="space-y-3">
                                                         <div>
-                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Euler Buckling Load <Latex math={"(P_{\\text{cr}})"} /></span>
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Sideways Buckling Load</span>
                                                             <div className="text-lg font-mono text-blue-600 dark:text-blue-400 font-extrabold flex items-baseline gap-1">{doubleStats.P_cr_180_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span></div>
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 italic block mt-1">Axial force at which the unsupported span between the innermost screws would snap sideways (column collapse). It drops rapidly the longer your working length, so this is the number most sensitive to screw placement.</span>
                                                         </div>
                                                         <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
-                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Eccentric-Yield Load <Latex math={"(F_{\\text{yield}} = M_{\\min}/e)"} /></span>
-                                                            <div className="text-lg font-mono text-emerald-600 dark:text-emerald-400 font-extrabold flex items-baseline gap-1">{doubleStats.F_yield_180_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span> <span className="text-[10px] text-slate-400 ml-2">e = {doubleStats.e_180.toFixed(1)} mm</span></div>
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Eccentric Yield Load <span className="text-[9px] text-slate-400 ml-1">(offset {doubleStats.e_180.toFixed(1)} mm)</span></span>
+                                                            <div className="text-lg font-mono text-emerald-600 dark:text-emerald-400 font-extrabold flex items-baseline gap-1">{doubleStats.F_yield_180_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span></div>
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 italic block mt-1">Axial force at which the plates begin to permanently bend. Because the plates sit off to the side of the bone axis, every kilogram of axial load bends them — and that bending is magnified as the working length approaches the buckling threshold. A longer working length lowers this number too.</span>
                                                         </div>
                                                         <div className="border-t border-slate-200 dark:border-slate-700 pt-2 bg-amber-50/50 dark:bg-amber-900/10 p-2 rounded">
                                                             <span className="text-[10px] text-amber-700 dark:text-amber-400 uppercase font-bold tracking-wider">Axial Load to Failure (Governing)</span>
                                                             <div className="text-2xl font-mono text-amber-600 dark:text-amber-400 font-extrabold flex items-baseline gap-1">{doubleStats.F_axial_fail_180_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span></div>
                                                             <span className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-400">Mode: {doubleStats.axial_mode_180}</span>
+                                                            <span className="text-[10px] text-amber-800 dark:text-amber-300 italic block mt-1">The clinically usable ceiling — whichever of the two failure modes would reach first. <strong>Mode: Buckling</strong> means the construct is too slender for its working length; shorten <em>L</em> or stiffen the plates. <strong>Mode: Plate Yield</strong> means the plates are stocky enough that they will yield under off-axis bending first; a stronger material or larger cross-section helps more than shortening <em>L</em>.</span>
                                                         </div>
                                                         <div className="border-t border-dashed border-slate-200 dark:border-slate-700 pt-2">
                                                             <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider">Axial Stiffness (metal crush only)</span>
                                                             <div className="text-sm font-mono text-slate-500 dark:text-slate-400 font-bold flex items-baseline gap-1">{(doubleStats.k_axial_180 / 1000).toFixed(1)} <span className="text-[10px] text-slate-400 dark:text-slate-500">kN/mm</span></div>
-                                                            <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">Diagnostic only — ignores buckling &amp; screw/bone compliance.</span>
+                                                            <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">Theoretical crush stiffness of the metal columns alone — ignores buckling, screw pull-out and bone-screw interface compliance. In the real limb, axial stiffness is dominated by those interfaces, not by the metal; treat this as a reference only.</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1749,31 +1772,34 @@
                                                     </h4>
                                                     <div className="space-y-3">
                                                         <div>
-                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Euler Buckling Load <Latex math={"(P_{\\text{cr}})"} /></span>
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Sideways Buckling Load</span>
                                                             <div className="text-lg font-mono text-blue-600 dark:text-blue-400 font-extrabold flex items-baseline gap-1">{doubleStats.P_cr_90_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span></div>
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 italic block mt-1">Axial force at which the unsupported span between the innermost screws would snap sideways. The orthogonal layout resists buckling in both anatomical planes because one plate is always "edge-on" to any bowing direction.</span>
                                                         </div>
                                                         <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
-                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Eccentric-Yield Load <Latex math={"(F_{\\text{yield}} = M_{\\min}/e)"} /></span>
-                                                            <div className="text-lg font-mono text-emerald-600 dark:text-emerald-400 font-extrabold flex items-baseline gap-1">{doubleStats.F_yield_90_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span> <span className="text-[10px] text-slate-400 ml-2">e = {doubleStats.e_90.toFixed(1)} mm</span></div>
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Eccentric Yield Load <span className="text-[9px] text-slate-400 ml-1">(offset {doubleStats.e_90.toFixed(1)} mm)</span></span>
+                                                            <div className="text-lg font-mono text-emerald-600 dark:text-emerald-400 font-extrabold flex items-baseline gap-1">{doubleStats.F_yield_90_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span></div>
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 italic block mt-1">Axial force at which the corner of the L-shaped construct begins to permanently yield. The 90° construct's combined centroid sits diagonally off the bone axis, so the lever arm acting on the plates under axial load is typically larger than in the 180° setup — expect a lower yield number here, amplified further by working length.</span>
                                                         </div>
                                                         <div className="border-t border-slate-200 dark:border-slate-700 pt-2 bg-amber-50/50 dark:bg-amber-900/10 p-2 rounded">
                                                             <span className="text-[10px] text-amber-700 dark:text-amber-400 uppercase font-bold tracking-wider">Axial Load to Failure (Governing)</span>
                                                             <div className="text-2xl font-mono text-amber-600 dark:text-amber-400 font-extrabold flex items-baseline gap-1">{doubleStats.F_axial_fail_90_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span></div>
                                                             <span className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-400">Mode: {doubleStats.axial_mode_90}</span>
+                                                            <span className="text-[10px] text-amber-800 dark:text-amber-300 italic block mt-1">The clinically usable ceiling for the orthogonal construct. <strong>Mode: Buckling</strong> → the span is too long for the plate thickness; shorten <em>L</em>. <strong>Mode: Plate Yield</strong> → the corner will fold under off-axis bending before the column buckles; size up the plates or switch material.</span>
                                                         </div>
                                                         <div className="border-t border-dashed border-slate-200 dark:border-slate-700 pt-2">
                                                             <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider">Axial Stiffness (metal crush only)</span>
                                                             <div className="text-sm font-mono text-slate-500 dark:text-slate-400 font-bold flex items-baseline gap-1">{(doubleStats.k_axial_90 / 1000).toFixed(1)} <span className="text-[10px] text-slate-400 dark:text-slate-500">kN/mm</span></div>
-                                                            <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">Diagnostic only — ignores buckling &amp; screw/bone compliance.</span>
+                                                            <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">Theoretical crush stiffness of the metal alone — the real construct is far softer axially because screws and cortex deform long before the metal does. Reference only.</span>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             <div className="mt-5 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400 leading-relaxed space-y-2">
-                                                <p><strong>Formulas.</strong> Euler: <Latex math={"P_{\\text{cr}} = \\pi^{2} E\\, I_{\\min}/(K L)^{2}"} /> with <Latex math="K" /> = <strong>{doubleStats.K_end.toFixed(1)}</strong> (effective length <Latex math={"K L"} /> = <strong>{doubleStats.L_eff.toFixed(1)} mm</strong>) and <Latex math={"I_{\\min} = \\min(I_{xx}, I_{yy})"} /> of the composite cross-section. Eccentric yield: <Latex math={"F_{\\text{yield}} = M_{\\min}/e"} />, where <Latex math={"M_{\\min}"} /> is the smaller of <Latex math={"M_{xx}"} /> and <Latex math={"M_{yy}"} /> from the block above, and <Latex math="e" /> is the distance from the bone axis to the construct centroid (<Latex math="d" /> for 180° parallel; <Latex math={"\\sqrt{c_x^{2}+c_y^{2}}"} /> for 90° orthogonal).</p>
-                                                <p><strong>Clinical reading.</strong> When <em>Mode: Buckling</em> governs, geometry dominates — longer <Latex math="L" />, slimmer plates, or a less restrained end condition will drop the limit rapidly. When <em>Mode: Plate Yield</em> governs, material and plate size dominate — the construct is stocky enough that eccentric bending is the true failure mechanism. This is precisely the mechanism that drives the parallel-vs-orthogonal difference in cadaveric axial-stiffness studies.</p>
-                                                <p className="italic"><strong>Assumptions &amp; limits.</strong> (1) Perfect screw–bone purchase; the ends of the column are idealised as fixed or pinned. Real screw pull-out, plate–bone friction, and cortical compliance are <strong>not</strong> modelled and typically reduce the true limit. (2) Bone contributes zero axial support (bridging assumption, consistent with the rest of this tab). (3) The "Axial Stiffness (metal crush)" row is the pure <Latex math={"k = 2EA/L"} /> value — shown for reference only; real axial compliance is overwhelmingly governed by screw–bone interface and column bending, not by compressive crush of the metal. (4) Stress concentrations at screw holes (<Latex math={"K_f"} />) are not applied to the axial block; treat these numbers as an idealised upper bound, consistent with the "Analytical vs. FEA" caveat below.</p>
+                                                <p><strong>How to read the two numbers clinically.</strong> The <em>Sideways Buckling Load</em> tells you when the span between your innermost screws is simply too long for the plate to stay straight under axial load — it is dominated by geometry (working length <em>L</em> = <strong>{doubleL.toFixed(0)} mm</strong>, end condition <strong>{doubleEndCond === 'fixed' ? 'fixed' : 'pinned'}</strong>, effective length <strong>{doubleStats.L_eff.toFixed(0)} mm</strong>). The <em>Eccentric Yield Load</em> tells you when off-axis bending of the plates overloads the metal itself — it is dominated by material, plate cross-section, and the same working length. The <em>Axial Load to Failure</em> is the smaller, coupled result: whichever mode reaches first sets the ceiling, and the two modes interact, so as the working length grows both numbers fall together. The mathematics behind these three values (Euler buckling, beam-column moment amplification, eccentricity definitions) is detailed in Part F of the Mathematical Report.</p>
+                                                <p><strong>What changes when you move the screws.</strong> Bringing the innermost screws closer to the fracture ends (shorter <em>L</em>) raises the Sideways Buckling Load quadratically and also raises the Eccentric Yield Load, because the plates no longer amplify their own bending moments. Conversely, extending <em>L</em> — or switching from a fixed (rigidly locked) to a pinned end condition — drops both numbers together. This is the mechanism behind the parallel-versus-orthogonal difference seen in cadaveric axial-stiffness studies.</p>
+                                                <p className="italic"><strong>Caveats.</strong> (1) The ends of the column are idealised as fixed or pinned — real screw pull-out, plate–bone friction and cortical compliance are <strong>not</strong> modelled and typically lower the true limit. (2) Bone is assumed to carry zero axial load across the gap (bridging assumption, consistent with the rest of this tab). (3) The "Axial Stiffness (metal crush only)" row is a pure-metal reference; in the real limb axial softness is governed by screws and cortex, not by metal compression. (4) Screw-hole stress concentrations are not applied to this block; treat the numbers as an idealised upper bound, consistent with the "Analytical vs. FEA" caveat later in this tab.</p>
                                             </div>
                                         </section>
                                     </div>
@@ -2521,10 +2547,89 @@
                                         </section>
                                     </div>
 
-                                    {/* PART F: MODELLING ASSUMPTIONS */}
+                                    {/* PART F: AXIAL COLUMN FAILURE */}
+                                    <div className="border-l-4 border-amber-500 pl-4 md:pl-6 pt-4 mt-12">
+                                        <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest mb-6">Part F: Axial Column Failure (Working-Length Dependent)</h2>
+
+                                        <p className="text-sm text-slate-700 dark:text-slate-300 mb-6 leading-relaxed">
+                                            The "Axial Load Resistance" panel on the main tab reports three working-length-dependent numbers: the <strong>Sideways Buckling Load</strong>, the <strong>Eccentric Yield Load</strong>, and the <strong>governing Axial Load to Failure</strong>. This section documents the mathematics behind those values and explains how the working length <Latex math="L" /> enters both failure modes.
+                                        </p>
+
+                                        <section className="mb-8">
+                                            <h3 className="text-lg font-bold text-amber-800 dark:text-amber-400 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">1. Euler Buckling of the Bridging Column</h3>
+                                            <p className="text-sm text-slate-700 dark:text-slate-300 mb-4 leading-relaxed">
+                                                Between the innermost screws on each side of the fracture, the two-plate construct behaves as a slender elastic column of length <Latex math="L" />. The classical Euler critical load for such a column is:
+                                            </p>
+                                            <div className="bg-slate-800 text-blue-100 p-5 rounded-xl text-sm shadow-inner flex flex-col items-center gap-4 mb-4">
+                                                <span className="text-xs font-bold text-slate-400">Euler Buckling Load:</span>
+                                                <Latex math={"P_{\\text{cr}} = \\dfrac{\\pi^{2}\\, E\\, I_{\\min}}{(K L)^{2}}"} />
+                                            </div>
+                                            <ul className="list-disc pl-5 text-sm text-slate-700 dark:text-slate-300 space-y-2 mb-4">
+                                                <li><Latex math="E" /> is the plate Young's modulus (converted from GPa to MPa internally).</li>
+                                                <li><Latex math={"I_{\\min} = \\min(I_{xx}, I_{yy})"} /> is the weak-axis area moment of inertia of the composite two-plate cross-section (same values displayed in the Implant Strength block above).</li>
+                                                <li><Latex math="K" /> is the effective-length factor: <Latex math="K = 0.5" /> for fixed–fixed end conditions and <Latex math="K = 1.0" /> for pinned–pinned. The current configuration uses <Latex math="K" /> = <strong>{doubleStats.K_end.toFixed(1)}</strong>, giving an effective length <Latex math={"K L"} /> = <strong>{doubleStats.L_eff.toFixed(1)} mm</strong>.</li>
+                                                <li>Because <Latex math="P_{\\text{cr}}" /> scales with <Latex math="1/L^{2}" />, doubling the working length reduces the buckling load to one quarter.</li>
+                                            </ul>
+                                        </section>
+
+                                        <section className="mb-8">
+                                            <h3 className="text-lg font-bold text-amber-800 dark:text-amber-400 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">2. Eccentricity from the Bone Axis to the Construct Centroid</h3>
+                                            <p className="text-sm text-slate-700 dark:text-slate-300 mb-4 leading-relaxed">
+                                                Because the plates sit laterally to the bone, an axial force applied through the bone axis does not pass through the plates' own centroid. The lever arm <Latex math="e" /> is defined geometrically:
+                                            </p>
+                                            <ul className="list-disc pl-5 text-sm text-slate-700 dark:text-slate-300 space-y-2 mb-4">
+                                                <li><strong>180° Parallel:</strong> the composite centroid lies on the bone axis, but each individual plate sits at an offset <Latex math={"e = d = R + t/2"} /> from that axis. We use this worst-case plate eccentricity (currently <strong>{doubleStats.e_180.toFixed(1)} mm</strong>), consistent with the tension-band view used elsewhere in this app.</li>
+                                                <li><strong>90° Orthogonal:</strong> the combined centroid itself sits off-axis at <Latex math={"e = \\sqrt{c_x^{2}+c_y^{2}}"} /> (currently <strong>{doubleStats.e_90.toFixed(1)} mm</strong>).</li>
+                                            </ul>
+                                        </section>
+
+                                        <section className="mb-8">
+                                            <h3 className="text-lg font-bold text-amber-800 dark:text-amber-400 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">3. Beam-Column Interaction: Why Yield Load Depends on <Latex math="L" /></h3>
+                                            <p className="text-sm text-slate-700 dark:text-slate-300 mb-4 leading-relaxed">
+                                                A naïve stub-column estimate would set the yield load simply at <Latex math={"F = M_{\\min}/e"} />, where <Latex math={"M_{\\min} = \\min(M_{xx}, M_{yy})"} /> is the plate limit moment from the Implant Strength block above. That estimate is <em>independent of working length</em>, which is physically unrealistic for slender constructs.
+                                            </p>
+                                            <p className="text-sm text-slate-700 dark:text-slate-300 mb-4 leading-relaxed">
+                                                In reality, once an axial compressive force <Latex math="F" /> exists, the column bows slightly and that deflection magnifies the initial eccentric moment. Classical beam-column theory captures this with the moment-amplification factor <Latex math={"1/(1 - F/P_{\\text{cr}})"} />. Requiring the amplified bending moment to just reach the plate limit:
+                                            </p>
+                                            <div className="bg-slate-800 text-blue-100 p-5 rounded-xl text-sm shadow-inner flex flex-col items-center gap-4 mb-4">
+                                                <span className="text-xs font-bold text-slate-400">Amplified Eccentric-Yield Criterion:</span>
+                                                <Latex math={"\\dfrac{F_{\\text{yield}}\\, e}{1 - F_{\\text{yield}}/P_{\\text{cr}}} \\; = \\; M_{\\min}"} />
+                                            </div>
+                                            <p className="text-sm text-slate-700 dark:text-slate-300 mb-4 leading-relaxed">
+                                                Rearranging gives a closed-form expression that couples plate yielding to Euler buckling:
+                                            </p>
+                                            <div className="bg-slate-800 text-blue-100 p-5 rounded-xl text-sm shadow-inner flex flex-col items-center gap-4 mb-4">
+                                                <span className="text-xs font-bold text-slate-400">Working-Length-Coupled Eccentric Yield Load:</span>
+                                                <Latex math={"F_{\\text{yield}} = \\dfrac{M_{\\min}}{\\, e + M_{\\min}/P_{\\text{cr}} \\,}"} />
+                                            </div>
+                                            <ul className="list-disc pl-5 text-sm text-slate-700 dark:text-slate-300 space-y-2 mb-4">
+                                                <li>As <Latex math={"P_{\\text{cr}} \\to \\infty"} /> (very short, stocky span), <Latex math={"F_{\\text{yield}} \\to M_{\\min}/e"} /> — the classical stub-column limit.</li>
+                                                <li>As <Latex math={"P_{\\text{cr}} \\to 0"} /> (very long, slender span), <Latex math={"F_{\\text{yield}} \\to 0"} /> — the yield number collapses along with the buckling number. This is exactly why changing the working length must move both values.</li>
+                                                <li>The returned <Latex math={"F_{\\text{yield}}"} /> is, by construction, always <Latex math={"\\leq P_{\\text{cr}}"} />, so the governing axial failure load is simply <Latex math={"F_{\\text{axial,fail}} = F_{\\text{yield}}"} /> after amplification.</li>
+                                            </ul>
+                                            <p className="text-sm text-slate-700 dark:text-slate-300 mb-4 leading-relaxed">
+                                                The UI tag "Mode: Buckling" vs "Mode: Plate Yield" is set by comparing the pure Euler load <Latex math={"P_{\\text{cr}}"} /> against the un-amplified stub yield <Latex math={"M_{\\min}/e"} />: whichever is smaller identifies the dominant physical mechanism, even though the displayed numeric ceiling always uses the coupled formula above.
+                                            </p>
+                                        </section>
+
+                                        <section className="mb-4">
+                                            <h3 className="text-lg font-bold text-amber-800 dark:text-amber-400 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">4. Axial Stiffness (Metal Crush Only)</h3>
+                                            <p className="text-sm text-slate-700 dark:text-slate-300 mb-4 leading-relaxed">
+                                                The "Axial Stiffness (metal crush only)" row uses the textbook axial-compression stiffness of two parallel columns:
+                                            </p>
+                                            <div className="bg-slate-800 text-blue-100 p-5 rounded-xl text-sm shadow-inner flex flex-col items-center gap-4 mb-4">
+                                                <Latex math={"k_{\\text{axial}} = \\dfrac{2 E A}{L}"} />
+                                            </div>
+                                            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                                                This value is deliberately shown as a lower-bound <em>reference</em>: it ignores column bending, screw pull-out compliance, and cortical deformation — the mechanisms that dominate real in-vivo axial compliance. It is not a clinically usable stiffness estimate.
+                                            </p>
+                                        </section>
+                                    </div>
+
+                                    {/* PART G: MODELLING ASSUMPTIONS */}
                                     <div className="border-l-4 border-slate-400 pl-4 md:pl-6 pt-4 mt-12">
                                         <section className="mb-4">
-                                            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-300 pb-2 mb-4">Part F: Fundamental Modelling Assumptions & Caveats</h3>
+                                            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-300 pb-2 mb-4">Part G: Fundamental Modelling Assumptions & Caveats</h3>
                                             <p className="text-sm text-slate-700 dark:text-slate-300 mb-6 leading-relaxed">
                                                 The mathematical models used in this calculator are based on exact textbook formulations for idealised beams. However, biological reality introduces variations. The following caveats are intentionally baked into the algorithms to provide the most conservative (safest) clinical estimation:
                                             </p>

@@ -2426,7 +2426,157 @@
                                                         <Latex math={`P_{yield} = \\frac{M_{max}}{\\left( e + \\frac{M_{max}}{P_{cr}} \\right)}`} />
                                                     </div>
                                                     <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed italic">
-                                                        Notice that if the column is very stiff against buckling (<Latex math="P_{cr}" /> is huge), the term <Latex math="\\frac{M_{max}}{P_{cr}}" /> becomes negligible, and the failure load is simply the Bending Strength divided by the horizontal offset (<Latex math="M_{max} / e" />). This is why changing the working length (<Latex math="L" />) barely alters the yield strength until <Latex math="L" /> becomes very large!
+                                                        Notice that if the column is very stiff against buckling (<Latex math="P_{cr}" /> is huge), the term <Latex math="\\frac{M_{max}}{P_{cr}}" /> becomes negligible, and the failure load is simply the Bending Strength divided by the horizontal offset (<Latex math="M_{max} / e" />). This is why changing the working length (<Latex math="L" />) barely alters the yield strength until <Latex math="L" /> becomes very large &mdash; <strong>but it does not mean <Latex math="L" /> is irrelevant</strong>. The full analytical justification, including how flexibility silently grows the effective offset, is derived below.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* ANALYTICAL DERIVATION: P-Delta and Working Length */}
+                                            <div className="bg-white dark:bg-slate-900/50 p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mt-8">
+                                                <h3 className="text-lg font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2 mb-4 border-b border-slate-200 dark:border-slate-700 pb-3">
+                                                    <CalculatorIcon /> Analytical Derivation: Working Length &rarr; Flexibility &rarr; Amplified Offset
+                                                </h3>
+                                                <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                                                    <p>
+                                                        <strong>The clinical question:</strong> "A longer working length makes the construct more flexible. Surely, a more flexible construct deflects further under the axial load, growing the offset and therefore the bending moment? Is this taken into consideration?" <strong>Yes &mdash; rigorously.</strong> The interaction formula above is in fact the closed-form solution to exactly this problem. Here is the derivation step by step.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>1. Setup &mdash; the loaded eccentric column.</strong> Consider the bridged plate as a slender column of length <Latex math="L" /> (the working length) loaded by an axial force <Latex math="P" /> applied at a fixed horizontal offset <Latex math="e" /> from the plate's neutral axis. Following the user's stipulation, <strong><Latex math="P" /> remains constant in both magnitude and direction</strong> as the construct bends &mdash; it does not "follow" the deformed axis (this is the standard non-follower load assumption used in osteosynthesis biomechanics).
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>2. Equilibrium of the deflected configuration.</strong> Let <Latex math="y(x)" /> be the lateral deflection of the plate at position <Latex math="x" />. At any cross-section, the internal bending moment must equal the external moment of the axial force about that section:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`E I \\frac{d^2 y}{d x^2} = -P \\,(e + y)`} />
+                                                    </div>
+                                                    <p>
+                                                        The crucial term is <Latex math="P \\, y" /> &mdash; the axial force, acting at a now-deflected position, generates an <em>additional</em> bending moment on top of the initial <Latex math="P\\,e" />. This is the <strong>P-Delta (P&minus;&Delta;) effect</strong>.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>3. Closed-form solution &mdash; the secant formula.</strong> Solving the linear ODE with pinned-pinned boundary conditions <Latex math="y(0)=y(L)=0" /> yields a maximum deflection at midspan:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`\\delta_{max} = e \\left[ \\sec\\!\\left( \\frac{\\pi}{2}\\sqrt{\\frac{P}{P_{cr}}} \\right) - 1 \\right]`} />
+                                                    </div>
+                                                    <p>
+                                                        and a maximum total moment:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`M_{max}^{total} = P \\,(e + \\delta_{max}) = P \\, e \\, \\sec\\!\\left( \\frac{\\pi}{2}\\sqrt{\\frac{P}{P_{cr}}} \\right)`} />
+                                                    </div>
+                                                    <p>
+                                                        with <Latex math={`P_{cr} = \\pi^2 E I / (KL)^2`} />. <strong>The working length <Latex math="L" /> enters explicitly through <Latex math="P_{cr}" />:</strong> doubling <Latex math="L" /> quarters <Latex math="P_{cr}" />, which in turn pushes the secant arbitrarily close to its singularity at <Latex math="P=P_{cr}" />, blowing up the amplified offset.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>4. Linearised P-Delta amplification factor.</strong> Expanding the secant for <Latex math="P/P_{cr} &lt; 1" /> &mdash; or equivalently summing the geometric P-Delta series in a moment-distribution iteration &mdash; gives the standard amplification factor:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`e_{eff} = \\frac{e}{1 - P / P_{cr}} \\quad \\Longrightarrow \\quad M_{max}^{total} = \\frac{P \\, e}{1 - P / P_{cr}}`} />
+                                                    </div>
+                                                    <p>
+                                                        This is the precise, quantitative answer to the clinical question. The <strong>effective offset</strong> <Latex math="e_{eff}" /> is the geometrical offset <Latex math="e" /> magnified by a factor that depends only on how close the load gets to <Latex math="P_{cr}" /> &mdash; and <Latex math="P_{cr}" /> depends on <Latex math="L" />.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>5. Failure criterion and recovery of the implemented formula.</strong> The plate yields when the amplified moment reaches the section's bending capacity, <Latex math="M_{max}^{total} = M_{max}" />. Substituting and solving the resulting linear equation for <Latex math="P" />:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`\\frac{P \\, e}{1 - P / P_{cr}} = M_{max} \\;\\Longrightarrow\\; P_{yield} = \\frac{M_{max}}{e + M_{max}/P_{cr}}`} />
+                                                    </div>
+                                                    <p>
+                                                        This is exactly the formula coded in <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 rounded">eccentricYieldLoad(M, e, P_cr)</code>. The denominator <Latex math="(e + M_{max}/P_{cr})" /> is the <strong>effective offset at failure</strong>: a geometrical part <Latex math="e" /> plus a flexibility-induced part <Latex math="M_{max}/P_{cr}" /> that grows whenever the working length <Latex math="L" /> grows.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>6. Reading the result &mdash; resolving the apparent paradox.</strong>
+                                                    </p>
+                                                    <ul className="list-disc pl-5 space-y-2">
+                                                        <li><strong>When <Latex math="P_{cr} \\gg M_{max}/e" /> (short, stiff, locked construct):</strong> the flexibility term <Latex math="M_{max}/P_{cr}" /> is negligible compared to <Latex math="e" />, and <Latex math="P_{yield} \\approx M_{max}/e" /> &mdash; independent of <Latex math="L" />. This is the regime in which surgeons correctly observe that "working length barely changes axial strength."</li>
+                                                        <li><strong>When <Latex math="L" /> grows so that <Latex math="P_{cr}" /> approaches <Latex math="M_{max}/e" />:</strong> the flexibility term becomes comparable to <Latex math="e" />, the effective offset roughly doubles, and <Latex math="P_{yield}" /> drops noticeably below <Latex math="M_{max}/e" />.</li>
+                                                        <li><strong>When <Latex math="L" /> is very long so that <Latex math="P_{cr} \\ll M_{max}/e" />:</strong> the denominator is dominated by <Latex math="M_{max}/P_{cr}" />, giving <Latex math="P_{yield} \\to P_{cr}" />. The construct fails by buckling instability before reaching plate yield.</li>
+                                                    </ul>
+                                                    <p>
+                                                        So the offset growth induced by flexibility <strong>is</strong> taken into account &mdash; both in the symbolic derivation and in the numerical algorithm. The reason the influence of <Latex math="L" /> looks small for typical clinical working lengths is not that the model ignores it, but that for realistic geometries the regime <Latex math="P_{cr} \\gg M_{max}/e" /> holds with a comfortable margin.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* L-SHAPED CORNER: Skew Bending */}
+                                            <div className="bg-white dark:bg-slate-900/50 p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mt-6">
+                                                <h3 className="text-lg font-bold text-amber-700 dark:text-amber-400 flex items-center gap-2 mb-4 border-b border-slate-200 dark:border-slate-700 pb-3">
+                                                    <CalculatorIcon /> Why the L-Shaped Corner Amplifies the Bending Moment
+                                                </h3>
+                                                <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                                                    <p>
+                                                        In the 90&deg; orthogonal configuration, the rigid coupling of the two plates forms an "L"-shaped composite cross-section. This single geometrical fact has a precise mathematical consequence that turns a moderate applied moment into an amplified peak fibre stress. The mechanism is <strong>skew (asymmetric, unsymmetric) bending</strong>.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>1. Symmetric vs. asymmetric sections.</strong> For any cross-section, the second-moment-of-area <em>tensor</em> in an arbitrary <Latex math="(x,y)" /> frame is:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`\\mathbf{I} = \\begin{pmatrix} I_{xx} & -I_{xy} \\\\ -I_{xy} & I_{yy} \\end{pmatrix}, \\qquad I_{xy} = \\int_A x \\, y \\, dA`} />
+                                                    </div>
+                                                    <p>
+                                                        For a doubly-symmetric section (such as the 180&deg; parallel plates loaded along their plane of symmetry), <Latex math="I_{xy} = 0" />: the chosen anatomical axes <em>are</em> the principal axes. The classical bending-stress formula <Latex math="\\sigma = M\\,c/I" /> applies directly. But for the <strong>L-shaped 90&deg; section, <Latex math="I_{xy} \\neq 0" />:</strong> the principal axes are rotated by an angle
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`\\tan(2\\theta_p) = \\frac{2\\, I_{xy}}{I_{xx} - I_{yy}}`} />
+                                                    </div>
+                                                    <p>
+                                                        away from the AP / ML axes. <strong>The construct's "easiest" direction to bend is no longer aligned with the load.</strong>
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>2. The skew-bending stress formula.</strong> When a moment <Latex math="M_x" /> is applied along the anatomical AP axis to such a section, the correct fibre stress at a point <Latex math="(x,y)" /> is no longer <Latex math="M_x\\,y/I_{xx}" />. It is the full asymmetric form:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`\\sigma(x,y) = \\frac{(M_x \\, I_{yy} - M_y \\, I_{xy})\\, y - (M_x \\, I_{xy} - M_y \\, I_{xx})\\, x}{I_{xx} \\, I_{yy} - I_{xy}^{\\,2}}`} />
+                                                    </div>
+                                                    <p>
+                                                        Even with <Latex math="M_y = 0" /> (load applied purely along one anatomical axis), the cross-term <Latex math="M_x \\, I_{xy} \\, x" /> in the numerator contributes a stress proportional to the horizontal coordinate <Latex math="x" />. The neutral axis rotates away from the load axis, and the points <em>furthest</em> from this rotated neutral axis &mdash; the tips of the L &mdash; experience a stress that is strictly larger than what <Latex math="\\sigma = M\\,c/I_{xx}" /> would predict.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>3. Why the corner is the amplifier.</strong> Geometrically, the L-shape places material in two perpendicular flanges that meet at a re-entrant corner. The principal-axis rotation puts the rotated neutral axis at roughly 45&deg; through the corner, so the tips of both flanges &mdash; lying farthest from this diagonal axis &mdash; carry the peak stress. An applied moment that would be carried "comfortably" by a symmetric section is instead concentrated at these flange tips. This is the mathematical origin of the statement <em>"the L-shaped corner amplifies the bending moment"</em>: it does not literally increase the integral of <Latex math="P\\,e" />, but it amplifies the <strong>peak fibre stress that the same applied moment produces</strong>, lowering the moment at which yield is reached.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>4. How the algorithm uses it.</strong> The full asymmetric formula above is exactly what is implemented in the stress evaluation at every corner of the L (see <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 rounded">allCorners_90.forEach(...)</code> in the source). The largest of these corner stresses sets the governing yield moment <Latex math="M_{max}" /> for the 90&deg; configuration. The penalty observed in the 90&deg; results is precisely <Latex math={`(I_{xx}I_{yy})/(I_{xx}I_{yy} - I_{xy}^{\\,2}) > 1`} /> &mdash; a purely geometric amplification with no adjustable parameter.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* BUCKLING REALITY: Educational note */}
+                                            <div className="bg-rose-50 dark:bg-rose-900/20 p-6 md:p-8 rounded-2xl shadow-inner border border-rose-200 dark:border-rose-800/50 mt-6">
+                                                <h3 className="text-lg font-bold text-rose-800 dark:text-rose-300 flex items-center gap-2 mb-4">
+                                                    <InfoIcon /> Why Buckling Does Not Govern in Practice &mdash; The Figure is Educational
+                                                </h3>
+                                                <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                                                    <p>
+                                                        It must be stated plainly: for the working lengths used in real osteosynthesis (typically 10&ndash;60&nbsp;mm of unsupported plate over a fracture gap), the critical Euler buckling load <Latex math="P_{cr}" /> is one to two orders of magnitude larger than any axial force a limb can deliver. <strong>The construct will not fail by buckling under physiological load.</strong> The buckling figure in the visualisation tab is presented for educational completeness only &mdash; to teach the failure-mode hierarchy &mdash; not as a clinically realistic scenario.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>A quick analytical sanity check.</strong> Take a standard 3.5&nbsp;mm stainless-steel plate (<Latex math={`E \\approx 200\\,\\text{GPa} = 2\\!\\times\\!10^{5}\\,\\text{MPa}`} />) with a minimum second moment of area <Latex math={`I_{min} \\sim 5\\,\\text{mm}^{4}`} /> and a worst-case working length <Latex math="L = 40\\,\\text{mm}" /> with non-locking screws (<Latex math="K=1" />):
+                                                    </p>
+                                                    <div className="bg-white dark:bg-slate-800 p-4 rounded text-center border border-rose-200 dark:border-rose-700 overflow-x-auto">
+                                                        <Latex math={`P_{cr} = \\frac{\\pi^2 E I_{min}}{(KL)^2} \\approx \\frac{\\pi^2 \\cdot 2\\!\\times\\!10^{5} \\cdot 5}{40^{2}} \\approx 6{,}170\\,\\text{N} \\approx 6.2\\,\\text{kN}`} />
+                                                    </div>
+                                                    <p>
+                                                        For two such plates in parallel the buckling capacity roughly doubles to about 12&nbsp;kN, and switching to locking screws (<Latex math="K=0.5" />) quadruples it again to roughly 50&nbsp;kN. Compare this to the peak ground-reaction force in a large dog at trot, which is on the order of <strong>1&ndash;2&nbsp;times body weight</strong> &mdash; a few hundred newtons at most, perhaps a kilonewton in a worst-case landing. <strong>The buckling reserve factor is typically 10&times;&ndash;100&times;.</strong>
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>What actually fails first.</strong> Substituting the same numbers into the eccentric-yield formula with a typical bending capacity <Latex math={`M_{max} \\sim 5\\,\\text{N\\!\\cdot\\!m}`} /> and a clinically realistic offset <Latex math="e \\sim 10\\,\\text{mm}" /> gives <Latex math={`P_{yield} \\approx M_{max}/e \\approx 500\\,\\text{N}`} /> &mdash; <strong>more than ten times lower than <Latex math="P_{cr}" /></strong>. Eccentric plate yielding (and, over many cycles, fatigue at stress risers) is therefore the dominant failure mode in every realistic clinical scenario.
+                                                    </p>
+
+                                                    <p className="bg-white dark:bg-slate-900 p-4 rounded-lg mt-2 border border-rose-100 dark:border-rose-800/50 font-medium">
+                                                        <strong>Take-home:</strong> the buckling derivation is included for two reasons only &mdash; (i) the formula <Latex math={`P_{yield} = M_{max}/(e + M_{max}/P_{cr})`} /> mathematically <em>requires</em> a value of <Latex math="P_{cr}" /> as one of its inputs, so the term must be quantified; and (ii) it teaches the surgeon how flexibility (long working length) would <em>theoretically</em> shift the failure mode. The numerical buckling load itself, and any visual depiction of macroscopic bow-out, should be read as <strong>educational</strong>, not as a prediction of in-vivo failure.
                                                     </p>
                                                 </div>
                                             </div>

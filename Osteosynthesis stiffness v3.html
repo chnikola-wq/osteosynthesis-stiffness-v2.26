@@ -462,6 +462,10 @@
             const [doublePreset, setDoublePreset] = useState('- Custom Dimensions -');
             const [doublePlateW, setDoublePlateW] = useState(10.5);
             const [doublePlateT, setDoublePlateT] = useState(3.2);
+            // Working length (span between innermost screws across the bridged gap) and column end-condition factor.
+            // K = 0.5 for fixed-fixed (well-locked plating), K = 1.0 for pinned-pinned (conservative lower bound).
+            const [doubleL, setDoubleL] = useState(40);
+            const [doubleEndCond, setDoubleEndCond] = useState('fixed');
 
             const doubleStats = useMemo(() => {
                 const R = doubleR;
@@ -556,8 +560,61 @@
                 const M_fatigue_yy_90 = (sigmaFatigue / max_stress_per_My) / 1000;
                 const M_fatigue_J_90 = ((sigmaFatigue * 0.57) * J_90) / (minDimPlate * 1000);
 
-                return { R, w, t, d, A, I_flat, I_edge, cx, cy, I_xx, I_yy, I_xx_180, I_yy_180, J_180, I_xx_90, I_yy_90, J_90, M_xx_180, M_yy_180, M_J_180, M_xx_90, M_yy_90, M_J_90, M_fatigue_xx_180, M_fatigue_yy_180, M_fatigue_J_180, M_fatigue_xx_90, M_fatigue_yy_90, M_fatigue_J_90, I_xy_90 };
-            }, [doubleR, doublePlateW, doublePlateT, doubleConfig, doublePlane180, sigmaYield, sigmaFatigue]);
+                // --- Axial Load Resistance (bridging column) ---
+                // Physical model: the two-plate construct acts as a slender column across a working length L
+                // (span between innermost screws). Under a physiological axial load applied through the bone
+                // axis, two failure modes compete:
+                //   (1) Euler column buckling of the composite double-plate cross-section about its weak axis.
+                //   (2) Yielding of the plates under the bending moment induced by the eccentricity between
+                //       the bone (load) axis and the construct centroid (M_induced = F_axial * e).
+                // The actual axial load to failure is the lesser of the two.
+                // E is provided in GPa; Euler needs MPa => multiply by 1000. Result in N, divided by 1000 for kN.
+                const K_end = (doubleEndCond === 'fixed') ? 0.5 : 1.0; // fixed-fixed vs pinned-pinned
+                const L_eff = Math.max(1, K_end * doubleL); // guard against L=0
+                const E_MPa = E_plate * 1000;
+
+                // 180 parallel: construct centroid is on the bone axis (0,0), each plate sits at offset d.
+                // A purely centric axial force therefore loads each plate as a column in compression AND
+                // induces local plate bending equal to F * d balanced between the two plates. We treat the
+                // worst-case plane eccentricity as d (conservative, matches single-plate tension-band view).
+                const I_min_180 = Math.min(I_xx_180, I_yy_180);
+                const P_cr_180 = (Math.pow(Math.PI, 2) * E_MPa * I_min_180) / Math.pow(L_eff, 2); // N
+                const e_180 = d; // mm, eccentricity from bone axis to each plate centroid
+                const M_gov_180_Nm = Math.min(M_xx_180, M_yy_180); // Nm (already in Nm)
+                const F_yield_180 = (M_gov_180_Nm * 1000) / Math.max(0.01, e_180); // N = (N*mm) / mm
+                const F_axial_fail_180 = Math.min(P_cr_180, F_yield_180); // N
+
+                // 90 orthogonal: composite centroid sits off the bone axis by sqrt(cx^2 + cy^2).
+                const I_min_90 = Math.min(I_xx_90, I_yy_90);
+                const P_cr_90 = (Math.pow(Math.PI, 2) * E_MPa * I_min_90) / Math.pow(L_eff, 2); // N
+                const e_90 = Math.sqrt(Math.pow(cx_90, 2) + Math.pow(cy_90, 2)); // mm
+                const M_gov_90_Nm = Math.min(M_xx_90, M_yy_90); // Nm
+                const F_yield_90 = (M_gov_90_Nm * 1000) / Math.max(0.01, e_90); // N
+                const F_axial_fail_90 = Math.min(P_cr_90, F_yield_90); // N
+
+                // Convert to kN for display
+                const P_cr_180_kN = P_cr_180 / 1000;
+                const F_yield_180_kN = F_yield_180 / 1000;
+                const F_axial_fail_180_kN = F_axial_fail_180 / 1000;
+                const P_cr_90_kN = P_cr_90 / 1000;
+                const F_yield_90_kN = F_yield_90 / 1000;
+                const F_axial_fail_90_kN = F_axial_fail_90 / 1000;
+
+                // Governing mode tag for UI
+                const axial_mode_180 = (P_cr_180 <= F_yield_180) ? 'Buckling' : 'Plate Yield';
+                const axial_mode_90 = (P_cr_90 <= F_yield_90) ? 'Buckling' : 'Plate Yield';
+
+                // Axial compliance (pure metal crush), shown only as a lower-bound diagnostic.
+                const k_axial_180 = (2 * E_MPa * A) / Math.max(0.01, doubleL); // N/mm
+                const k_axial_90 = (2 * E_MPa * A) / Math.max(0.01, doubleL); // N/mm (same A)
+
+                return { R, w, t, d, A, I_flat, I_edge, cx, cy, I_xx, I_yy, I_xx_180, I_yy_180, J_180, I_xx_90, I_yy_90, J_90, M_xx_180, M_yy_180, M_J_180, M_xx_90, M_yy_90, M_J_90, M_fatigue_xx_180, M_fatigue_yy_180, M_fatigue_J_180, M_fatigue_xx_90, M_fatigue_yy_90, M_fatigue_J_90, I_xy_90,
+                    // axial
+                    L_eff, K_end, e_180, e_90,
+                    P_cr_180_kN, F_yield_180_kN, F_axial_fail_180_kN, axial_mode_180,
+                    P_cr_90_kN, F_yield_90_kN, F_axial_fail_90_kN, axial_mode_90,
+                    k_axial_180, k_axial_90 };
+            }, [doubleR, doublePlateW, doublePlateT, doubleConfig, doublePlane180, sigmaYield, sigmaFatigue, E_plate, doubleL, doubleEndCond]);
 
             const scale = 3.5;
             const paradoxVarMajor = paradoxMode === 'flat' ? 't' : 'w';
@@ -655,7 +712,7 @@
                                                 <li>Set the radius of the bone gap and the dimensions of the dual plates.</li>
                                             </ul>
                                             <p className="text-sm text-slate-700 dark:text-slate-300 mt-3 italic bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
-                                                The app will calculate the isolated geometric stiffness and yield strength of the double-plate construct without relying on bone contact, highlighting which plane becomes the weakest link.
+                                                The app will calculate the isolated geometric stiffness and yield strength of the double-plate construct without relying on bone contact, highlighting which plane becomes the weakest link. An optional <strong>Axial Load Resistance</strong> block (requires a working length <Latex math="L" />) further estimates column buckling and eccentric-bending failure under axial load.
                                             </p>
                                         </section>
 
@@ -1305,6 +1362,32 @@
                                                 </div>
                                                 <input type="range" min="1" max="8" step="0.1" value={doublePlateT} onChange={(e) => { setDoublePlateT(Number(e.target.value)); setDoublePreset('- Custom Dimensions -'); }} className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
                                             </div>
+                                            <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                                                <div className="flex justify-between mb-2">
+                                                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Working Length (L)</label>
+                                                    <span className="text-sm font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded">{doubleL} mm</span>
+                                                </div>
+                                                <input type="range" min="10" max="120" step="1" value={doubleL} onChange={(e) => setDoubleL(Number(e.target.value))} className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">Span between the innermost screws across the bridged gap. Used only for the axial-load block below.</p>
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest mb-2 block">Screw Fixation (End Condition)</label>
+                                                <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                                                    <button
+                                                        onClick={() => setDoubleEndCond('fixed')}
+                                                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${doubleEndCond === 'fixed' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+                                                    >
+                                                        Locked (K=0.5)
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setDoubleEndCond('pinned')}
+                                                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${doubleEndCond === 'pinned' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+                                                    >
+                                                        Pinned (K=1.0)
+                                                    </button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">Locked ≈ well-purchased locking screws; Pinned ≈ conservative lower bound.</p>
+                                            </div>
                                         </div>
 
                                         <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-start gap-3">
@@ -1620,6 +1703,81 @@
                                         </div>
                                     </div>
                                     
+                                    {/* Clinical Logic Boxes */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                                        {/* Axial Load Resistance (NEW) */}
+                                        <section className="md:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-amber-200 dark:border-amber-800/50 transition-colors duration-300">
+                                            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center">
+                                                <span className="bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 p-2 rounded-lg mr-3"><ShieldIcon /></span>
+                                                Axial Load Resistance <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded">Working Length Required</span>
+                                            </h2>
+                                            <p className="text-xs text-slate-600 dark:text-slate-400 mb-5 leading-relaxed">
+                                                Under an axial load applied through the bone axis, the bridging construct can fail by <strong>column buckling</strong> (slender-column instability over the working length <Latex math="L" />) or by <strong>plate yield from eccentric bending</strong> (<Latex math={"M_{\\text{induced}} = F_{\\text{axial}} \\cdot e"} />, where <Latex math="e" /> is the offset between the bone axis and the construct centroid). The governing axial load to failure is the lesser of the two. <em>This block is purely diagnostic; bending and torsion remain the primary clinical stability metrics above.</em>
+                                            </p>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {/* 180 Axial */}
+                                                <div className={`p-5 rounded-xl border-2 transition-all ${doubleConfig === '180' ? 'border-blue-200 dark:border-blue-700 bg-blue-50/20 dark:bg-blue-900/20' : 'opacity-40 grayscale dark:border-slate-700'}`}>
+                                                    <h4 className={`text-sm font-black uppercase tracking-widest mb-4 pb-2 border-b-2 ${doubleConfig === '180' ? 'text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800' : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
+                                                        180° Parallel — Axial
+                                                    </h4>
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Euler Buckling Load <Latex math={"(P_{\\text{cr}})"} /></span>
+                                                            <div className="text-lg font-mono text-blue-600 dark:text-blue-400 font-extrabold flex items-baseline gap-1">{doubleStats.P_cr_180_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span></div>
+                                                        </div>
+                                                        <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Eccentric-Yield Load <Latex math={"(F_{\\text{yield}} = M_{\\min}/e)"} /></span>
+                                                            <div className="text-lg font-mono text-emerald-600 dark:text-emerald-400 font-extrabold flex items-baseline gap-1">{doubleStats.F_yield_180_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span> <span className="text-[10px] text-slate-400 ml-2">e = {doubleStats.e_180.toFixed(1)} mm</span></div>
+                                                        </div>
+                                                        <div className="border-t border-slate-200 dark:border-slate-700 pt-2 bg-amber-50/50 dark:bg-amber-900/10 p-2 rounded">
+                                                            <span className="text-[10px] text-amber-700 dark:text-amber-400 uppercase font-bold tracking-wider">Axial Load to Failure (Governing)</span>
+                                                            <div className="text-2xl font-mono text-amber-600 dark:text-amber-400 font-extrabold flex items-baseline gap-1">{doubleStats.F_axial_fail_180_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span></div>
+                                                            <span className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-400">Mode: {doubleStats.axial_mode_180}</span>
+                                                        </div>
+                                                        <div className="border-t border-dashed border-slate-200 dark:border-slate-700 pt-2">
+                                                            <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider">Axial Stiffness (metal crush only)</span>
+                                                            <div className="text-sm font-mono text-slate-500 dark:text-slate-400 font-bold flex items-baseline gap-1">{(doubleStats.k_axial_180 / 1000).toFixed(1)} <span className="text-[10px] text-slate-400 dark:text-slate-500">kN/mm</span></div>
+                                                            <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">Diagnostic only — ignores buckling &amp; screw/bone compliance.</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* 90 Axial */}
+                                                <div className={`p-5 rounded-xl border-2 transition-all ${doubleConfig === '90' ? 'border-amber-400 dark:border-amber-600 bg-amber-50/30 dark:bg-amber-900/10' : 'opacity-40 grayscale dark:border-slate-700'}`}>
+                                                    <h4 className={`text-sm font-black uppercase tracking-widest mb-4 pb-2 border-b-2 ${doubleConfig === '90' ? 'text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800' : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
+                                                        90° Orthogonal — Axial
+                                                    </h4>
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Euler Buckling Load <Latex math={"(P_{\\text{cr}})"} /></span>
+                                                            <div className="text-lg font-mono text-blue-600 dark:text-blue-400 font-extrabold flex items-baseline gap-1">{doubleStats.P_cr_90_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span></div>
+                                                        </div>
+                                                        <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
+                                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Eccentric-Yield Load <Latex math={"(F_{\\text{yield}} = M_{\\min}/e)"} /></span>
+                                                            <div className="text-lg font-mono text-emerald-600 dark:text-emerald-400 font-extrabold flex items-baseline gap-1">{doubleStats.F_yield_90_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span> <span className="text-[10px] text-slate-400 ml-2">e = {doubleStats.e_90.toFixed(1)} mm</span></div>
+                                                        </div>
+                                                        <div className="border-t border-slate-200 dark:border-slate-700 pt-2 bg-amber-50/50 dark:bg-amber-900/10 p-2 rounded">
+                                                            <span className="text-[10px] text-amber-700 dark:text-amber-400 uppercase font-bold tracking-wider">Axial Load to Failure (Governing)</span>
+                                                            <div className="text-2xl font-mono text-amber-600 dark:text-amber-400 font-extrabold flex items-baseline gap-1">{doubleStats.F_axial_fail_90_kN.toFixed(2)} <span className="text-[10px] text-slate-500 dark:text-slate-400">kN</span></div>
+                                                            <span className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-400">Mode: {doubleStats.axial_mode_90}</span>
+                                                        </div>
+                                                        <div className="border-t border-dashed border-slate-200 dark:border-slate-700 pt-2">
+                                                            <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider">Axial Stiffness (metal crush only)</span>
+                                                            <div className="text-sm font-mono text-slate-500 dark:text-slate-400 font-bold flex items-baseline gap-1">{(doubleStats.k_axial_90 / 1000).toFixed(1)} <span className="text-[10px] text-slate-400 dark:text-slate-500">kN/mm</span></div>
+                                                            <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">Diagnostic only — ignores buckling &amp; screw/bone compliance.</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-5 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400 leading-relaxed space-y-2">
+                                                <p><strong>Formulas.</strong> Euler: <Latex math={"P_{\\text{cr}} = \\pi^{2} E\\, I_{\\min}/(K L)^{2}"} /> with <Latex math="K" /> = <strong>{doubleStats.K_end.toFixed(1)}</strong> (effective length <Latex math={"K L"} /> = <strong>{doubleStats.L_eff.toFixed(1)} mm</strong>) and <Latex math={"I_{\\min} = \\min(I_{xx}, I_{yy})"} /> of the composite cross-section. Eccentric yield: <Latex math={"F_{\\text{yield}} = M_{\\min}/e"} />, where <Latex math={"M_{\\min}"} /> is the smaller of <Latex math={"M_{xx}"} /> and <Latex math={"M_{yy}"} /> from the block above, and <Latex math="e" /> is the distance from the bone axis to the construct centroid (<Latex math="d" /> for 180° parallel; <Latex math={"\\sqrt{c_x^{2}+c_y^{2}}"} /> for 90° orthogonal).</p>
+                                                <p><strong>Clinical reading.</strong> When <em>Mode: Buckling</em> governs, geometry dominates — longer <Latex math="L" />, slimmer plates, or a less restrained end condition will drop the limit rapidly. When <em>Mode: Plate Yield</em> governs, material and plate size dominate — the construct is stocky enough that eccentric bending is the true failure mechanism. This is precisely the mechanism that drives the parallel-vs-orthogonal difference in cadaveric axial-stiffness studies.</p>
+                                                <p className="italic"><strong>Assumptions &amp; limits.</strong> (1) Perfect screw–bone purchase; the ends of the column are idealised as fixed or pinned. Real screw pull-out, plate–bone friction, and cortical compliance are <strong>not</strong> modelled and typically reduce the true limit. (2) Bone contributes zero axial support (bridging assumption, consistent with the rest of this tab). (3) The "Axial Stiffness (metal crush)" row is the pure <Latex math={"k = 2EA/L"} /> value — shown for reference only; real axial compliance is overwhelmingly governed by screw–bone interface and column bending, not by compressive crush of the metal. (4) Stress concentrations at screw holes (<Latex math={"K_f"} />) are not applied to the axial block; treat these numbers as an idealised upper bound, consistent with the "Analytical vs. FEA" caveat below.</p>
+                                            </div>
+                                        </section>
+                                    </div>
+
                                     {/* Clinical Logic Boxes */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                                         {/* Fatigue Resilience */}

@@ -2772,6 +2772,149 @@
                                                 </div>
                                             </div>
 
+                                            {/* SENSITIVITY: dP_yield/dL */}
+                                            <div className="bg-white dark:bg-slate-900/50 p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mt-6">
+                                                <h3 className="text-lg font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2 mb-4 border-b border-slate-200 dark:border-slate-700 pb-3">
+                                                    <CalculatorIcon /> Sensitivity Analysis: How Much Does Working Length Actually Move <Latex math={`P_{yield}`} />?
+                                                </h3>
+                                                <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                                                    <p>
+                                                        <strong>The clinical observation:</strong> "When I increase the working length, the load to permanent bend changes very little. Are you sure the math is right?" <strong>Yes &mdash; here is the sensitivity computed analytically.</strong>
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>1. Differentiate the eccentric-yield formula with respect to <Latex math="L" />.</strong> Starting from
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`P_{yield}(L) = \\frac{M_{max}}{e + M_{max}/P_{cr}(L)}, \\qquad P_{cr}(L) = \\frac{\\pi^2 E I}{(K L)^2} = \\frac{C}{L^2}`} />
+                                                    </div>
+                                                    <p>
+                                                        with <Latex math={`C = \\pi^2 E I / K^2`} /> a constant for a given construct. Substitute and simplify:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`P_{yield}(L) = \\frac{M_{max}}{e + M_{max} L^2 / C} = \\frac{M_{max} \\, C}{e\\,C + M_{max}\\,L^2}`} />
+                                                    </div>
+                                                    <p>
+                                                        Differentiating with the quotient rule:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`\\frac{dP_{yield}}{dL} = -\\frac{2\\, M_{max}^{2}\\, C\\, L}{(e\\,C + M_{max}\\,L^{2})^{2}} = -\\frac{2\\, P_{yield}^{2}\\, L}{C} = -\\frac{2\\,P_{yield}^{2}}{L\\, P_{cr}}`} />
+                                                    </div>
+                                                    <p>
+                                                        The slope is <strong>strictly negative</strong> &mdash; longer <Latex math="L" /> always lowers <Latex math={`P_{yield}`} />, never raises it. But the magnitude is suppressed by the factor <Latex math={`P_{yield}/P_{cr}`} />, which is small in the operative regime.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>2. Convert to a dimensionless logarithmic sensitivity.</strong> Multiplying both sides by <Latex math={`L/P_{yield}`} />:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`\\frac{d \\ln P_{yield}}{d \\ln L} = -\\,\\frac{2\\, P_{yield}}{P_{cr}} = -\\,\\frac{2\\, M_{max}/P_{cr}}{e + M_{max}/P_{cr}}`} />
+                                                    </div>
+                                                    <p>
+                                                        This is the cleanest possible answer: the percentage change in <Latex math={`P_{yield}`} /> per percentage change in <Latex math="L" /> is set entirely by the ratio of the flexibility-induced offset (<Latex math={`M_{max}/P_{cr}`} />) to the geometric offset (<Latex math="e" />).
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>3. Plug in clinically realistic numbers.</strong> Take a 180&deg; pair of 3.5&nbsp;mm plates, <Latex math={`E = 2\\!\\times\\!10^{5}\\,\\text{MPa}`} />, <Latex math={`I_{min} \\approx 10\\,\\text{mm}^{4}`} /> for the pair, locking screws (<Latex math="K=0.5" />), <Latex math="L = 40\\,\\text{mm}" />, <Latex math="e \\approx 13\\,\\text{mm}" />, and <Latex math={`M_{max} \\approx 8\\,\\text{N\\!\\cdot\\!m}`} />. Then:
+                                                    </p>
+                                                    <ul className="list-disc pl-5 space-y-2">
+                                                        <li><Latex math={`P_{cr} = \\pi^2 \\cdot 2\\!\\times\\!10^{5} \\cdot 10 / (0.5 \\cdot 40)^{2} \\approx 49{,}000\\,\\text{N} = 49\\,\\text{kN}`} /></li>
+                                                        <li><Latex math={`M_{max}/P_{cr} = 8000\\,\\text{N\\!\\cdot\\!mm} / 49{,}000\\,\\text{N} \\approx 0.16\\,\\text{mm}`} /></li>
+                                                        <li>Flexibility-induced offset is <Latex math={`0.16/13 \\approx 1.3\\%`} /> of the geometric offset</li>
+                                                        <li>Logarithmic sensitivity: <Latex math={`d\\ln P_{yield}/d\\ln L \\approx -2 \\cdot 0.013 = -2.6\\%`} /> per 100% change in <Latex math="L" /></li>
+                                                    </ul>
+                                                    <p>
+                                                        <strong>So doubling the working length from 40&nbsp;mm to 80&nbsp;mm reduces <Latex math={`P_{yield}`} /> by only ~2.6%.</strong> A 50% increase in <Latex math="L" /> moves it less than 2%. This is not a bug in the model &mdash; it is the correct physics. The geometric offset <Latex math="e \\approx 13\\,\\text{mm}" /> dominates the denominator, and flexibility nudges it by tenths of a millimetre.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>4. When does <Latex math="L" /> actually matter?</strong> The sensitivity becomes large only when <Latex math={`M_{max}/P_{cr}`} /> approaches <Latex math="e" />, i.e. when <Latex math={`P_{cr} \\to M_{max}/e`} />. Set the two equal:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`L_{*} = \\frac{1}{K} \\sqrt{\\frac{\\pi^{2} E I e}{M_{max}}}`} />
+                                                    </div>
+                                                    <p>
+                                                        Beyond this transition length the sensitivity climbs rapidly (towards <Latex math="-1" />), the failure mode flips from plate yield to buckling, and the construct becomes <em>genuinely</em> sensitive to <Latex math="L" />. For the numbers above, <Latex math={`L_{*} \\approx 200\\,\\text{mm}`} /> &mdash; far beyond any clinical working length. That is why the calculator's <Latex math={`P_{yield}`} /> is so flat against <Latex math="L" /> in the slider's range: the construct is operating in the regime where the math <em>predicts</em> a flat curve.
+                                                    </p>
+
+                                                    <p className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg mt-2 border border-blue-200 dark:border-blue-800 font-medium">
+                                                        <strong>Verification:</strong> the formula gives the exact slope, the slope is small but non-zero in the clinical regime, and the slope grows correctly as <Latex math="L" /> approaches <Latex math={`L_{*}`} />. The model is consistent. The user's observation is the model's prediction.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* SINGLE-PLATE DERIVATION */}
+                                            <div className="bg-white dark:bg-slate-900/50 p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mt-6">
+                                                <h3 className="text-lg font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-2 mb-4 border-b border-slate-200 dark:border-slate-700 pb-3">
+                                                    <CalculatorIcon /> Single-Plate Bridging: Analytical Derivation
+                                                </h3>
+                                                <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                                                    <p>
+                                                        The single-plate bridging scenario uses the same eccentric-column framework as the 180&deg; and 90&deg; configurations, with two simplifications: there is only one plate to share the load, and there is no contralateral plate to provide a moment couple. Every quantity displayed in the Single Plate cards comes from the derivations below.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>1. Cross-section properties (one plate of width <Latex math="w" /> and thickness <Latex math="t" />).</strong> Bending about the plate's two centroidal axes uses the standard rectangular section moments of area:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`I_{flat} = \\frac{w \\, t^{3}}{12}, \\qquad I_{edge} = \\frac{t \\, w^{3}}{12}, \\qquad A = w\\,t`} />
+                                                    </div>
+                                                    <p>
+                                                        Because there is only one plate, no parallel-axis term is added &mdash; the plate bends about <em>its own</em> centroid. Whichever orientation is selected (ML or AP), one of <Latex math={`I_{flat}, I_{edge}`} /> becomes <Latex math={`I_{xx,single}`} /> and the other becomes <Latex math={`I_{yy,single}`} />.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>2. Bending capacity.</strong> The plate yields when the peak fibre stress reaches <Latex math={`\\sigma_{Y}`} />. For each centroidal axis:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`M_{xx,single} = \\frac{\\sigma_{Y} \\, I_{xx,single}}{c_{y}}, \\qquad M_{yy,single} = \\frac{\\sigma_{Y} \\, I_{yy,single}}{c_{x}}`} />
+                                                    </div>
+                                                    <p>
+                                                        with <Latex math={`c_{x}, c_{y}`} /> the half-widths of the plate in the relevant directions (<Latex math="t/2" /> or <Latex math="w/2" />). The fatigue counterparts replace <Latex math={`\\sigma_{Y}`} /> by <Latex math={`\\sigma_{f}`} />.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>3. Saint-Venant torsion (single plate).</strong> The single-plate torsional constant is exactly half of the 180&deg; pair's:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`J_{single} = \\frac{w \\, t^{3}}{3}\\left(1 - 0.63\\,\\frac{t}{w}\\right) \\quad\\text{(thin rectangle, } w &gt; t\\text{)}`} />
+                                                    </div>
+                                                    <p>
+                                                        Yield torque uses the standard thin-rectangle relation <Latex math={`T_{y} \\approx 0.57 \\, \\sigma_{Y} \\, J / t`} />, identical in form to the 180&deg; case but with a single plate's <Latex math="J" />.
+                                                    </p>
+
+                                                    <p>
+                                                        <strong>4. Eccentric axial load &mdash; the same beam-column formula.</strong> The bone's mechanical axis sits at offset
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`e_{single} = R + t/2 = d`} />
+                                                    </div>
+                                                    <p>
+                                                        from the single plate's centroid &mdash; numerically <em>identical</em> to <Latex math={`e_{180}`} />, because the geometry of one plate against a bone is the same as one plate of a 180&deg; pair. Critical buckling load and eccentric yield then follow the same formulas already derived:
+                                                    </p>
+                                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded text-center border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                                        <Latex math={`P_{cr,single} = \\frac{\\pi^{2} E \\, I_{min,single}}{(KL)^{2}}, \\qquad P_{yield,single} = \\frac{M_{max,single}}{e_{single} + M_{max,single}/P_{cr,single}}`} />
+                                                    </div>
+
+                                                    <p>
+                                                        <strong>5. Why a single plate is approximately half of a 180&deg; pair.</strong> Comparing single to 180&deg; for the same geometry:
+                                                    </p>
+                                                    <ul className="list-disc pl-5 space-y-2">
+                                                        <li><strong>Buckling:</strong> <Latex math={`I_{min,180} = 2\\, I_{min,single}`} /> (two plates contribute additively about the same centroidal axis when bending the &laquo;weak&raquo; way), so <Latex math={`P_{cr,180} = 2\\, P_{cr,single}`} /> exactly.</li>
+                                                        <li><strong>Plate yield (geometric limit):</strong> The 180&deg; configuration adds the parallel-axis term <Latex math={`A\\,d^{2}`} /> for bending about the axis between the plates &mdash; this is what dominates <Latex math={`I_{yy,180}`} /> in the ML configuration. For bending about the plate's own short axis (no parallel-axis contribution), 180&deg; gives exactly <Latex math={`2\\, M_{single}`} />. So in the regime where the geometric offset dominates the denominator, <Latex math={`P_{yield,180}/P_{yield,single} \\approx 2`} />.</li>
+                                                        <li><strong>Working-length sensitivity:</strong> the logarithmic slope <Latex math={`d\\ln P_{yield}/d\\ln L = -2\\,P_{yield}/P_{cr}`} /> derived above is <em>scale-invariant</em>: doubling both <Latex math={`P_{yield}`} /> and <Latex math={`P_{cr}`} /> by adding a second parallel plate leaves the slope unchanged. So a single plate behaves the same way against working length, just at half the absolute capacity.</li>
+                                                    </ul>
+
+                                                    <p>
+                                                        <strong>6. Why a single plate is more sensitive to fatigue.</strong> With no companion plate to share cyclic load, every load cycle is carried entirely by one section. The fatigue moment <Latex math={`M_{f,single} = M_{f,180}/2`} /> for the in-plane bending direction. For long-bone bridging this is the dominant clinical limitation of single-plate constructs &mdash; not the static yield load, but the cycle count to fatigue failure.
+                                                    </p>
+
+                                                    <p className="bg-emerald-50 dark:bg-emerald-900/30 p-4 rounded-lg mt-2 border border-emerald-200 dark:border-emerald-800 font-medium">
+                                                        <strong>Bottom line:</strong> the single-plate scenario is the same physics as the 180&deg; case with the <Latex math={`2\\times`} /> doubling factor removed. The calculator now displays all three cases side-by-side so the &laquo;cost&raquo; of removing one plate (a halving of capacity, plus fatigue exposure) is directly visible.
+                                                    </p>
+                                                </div>
+                                            </div>
+
                                             <div className="bg-amber-50 dark:bg-slate-800 p-6 md:p-8 rounded-2xl shadow-inner border border-amber-200 dark:border-slate-700 mt-8">
                                                 <h3 className="text-lg font-bold text-amber-900 dark:text-amber-400 flex items-center gap-2 mb-4">
                                                     <InfoIcon /> Clinical Reality: Why Use 4-Point Bending As A Baseline?

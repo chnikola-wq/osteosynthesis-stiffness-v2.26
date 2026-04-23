@@ -533,6 +533,11 @@
 
                 if (doubleConfig === '180') {
                     I_xx = I_xx_180; I_yy = I_yy_180; cx = 0; cy = 0;
+                } else if (doubleConfig === 'single') {
+                    // For the centroid display we use the single plate's own centroid (offset d from the bone axis).
+                    // In the bone-centred frame the plate centroid sits at (d, 0) for ML or (0, d) for AP.
+                    if (doublePlane180 === 'ML') { cx = d; cy = 0; } else { cx = 0; cy = d; }
+                    I_xx = 0; I_yy = 0; // not used for the 'single' anchor visualisation; the plate stats are read directly
                 } else {
                     I_xx = I_xx_90; I_yy = I_yy_90; cx = cx_90; cy = cy_90;
                 }
@@ -588,6 +593,47 @@
                 const F_yield_90 = eccentricYieldLoad(M_gov_90_Nm, e_90, P_cr_90); 
                 const F_axial_fail_90 = Math.min(P_cr_90, F_yield_90); 
 
+                // --- Single Plate (Bridging) ---
+                // One plate at offset d from the bone mechanical axis. Plate bends about its
+                // own centroidal axes; orientation tracks the user's plane selection so that
+                // "ML" places the plate medially (offset along x), "AP" places it anteriorly.
+                let I_xx_single, I_yy_single, y_max_single, x_max_single;
+                if (doublePlane180 === 'ML') {
+                    // Plate placed medially: long edge runs proximodistal, broad face contacts bone.
+                    // Bending about x-axis (AP-axis bend) flexes about the long edge -> I_edge.
+                    // Bending about y-axis (ML-axis bend) flexes about the short edge -> I_flat.
+                    I_xx_single = I_edge;
+                    I_yy_single = I_flat;
+                    y_max_single = w / 2;
+                    x_max_single = t / 2;
+                } else {
+                    I_xx_single = I_flat;
+                    I_yy_single = I_edge;
+                    y_max_single = t / 2;
+                    x_max_single = w / 2;
+                }
+                const J_single = K_plate; // one plate
+                const A_single = A;
+                const M_xx_single = (sigmaYield * I_xx_single) / (y_max_single * 1000);
+                const M_yy_single = (sigmaYield * I_yy_single) / (x_max_single * 1000);
+                const M_J_single = ((sigmaYield * 0.57) * J_single) / (minDimPlate * 1000);
+                const M_fatigue_xx_single = (sigmaFatigue * I_xx_single) / (y_max_single * 1000);
+                const M_fatigue_yy_single = (sigmaFatigue * I_yy_single) / (x_max_single * 1000);
+                const M_fatigue_J_single = ((sigmaFatigue * 0.57) * J_single) / (minDimPlate * 1000);
+
+                const I_min_single = Math.min(I_xx_single, I_yy_single);
+                const P_cr_single = (Math.pow(Math.PI, 2) * E_MPa * I_min_single) / Math.pow(L_eff, 2);
+                const e_single = d; // bone centre is offset by d from the single plate
+                const M_gov_single_Nm = Math.min(M_xx_single, M_yy_single);
+                const F_yield_single = eccentricYieldLoad(M_gov_single_Nm, e_single, P_cr_single);
+                const F_axial_fail_single = Math.min(P_cr_single, F_yield_single);
+                const F_yield_stub_single = (M_gov_single_Nm * 1000) / Math.max(0.01, e_single);
+                const axial_mode_single = (P_cr_single <= F_yield_stub_single) ? 'Buckling' : 'Plate Yield';
+                const k_axial_single = (E_MPa * A_single) / Math.max(0.01, doubleL);
+                const P_cr_single_kN = P_cr_single / 1000;
+                const F_yield_single_kN = F_yield_single / 1000;
+                const F_axial_fail_single_kN = F_axial_fail_single / 1000;
+
                 const P_cr_180_kN = P_cr_180 / 1000;
                 const F_yield_180_kN = F_yield_180 / 1000;
                 const F_axial_fail_180_kN = F_axial_fail_180 / 1000;
@@ -607,7 +653,12 @@
                     L_eff, K_end, e_180, e_90,
                     P_cr_180_kN, F_yield_180_kN, F_axial_fail_180_kN, axial_mode_180,
                     P_cr_90_kN, F_yield_90_kN, F_axial_fail_90_kN, axial_mode_90,
-                    k_axial_180, k_axial_90 };
+                    k_axial_180, k_axial_90,
+                    // Single-plate bridging
+                    I_xx_single, I_yy_single, J_single, A_single,
+                    M_xx_single, M_yy_single, M_J_single,
+                    M_fatigue_xx_single, M_fatigue_yy_single, M_fatigue_J_single,
+                    e_single, P_cr_single_kN, F_yield_single_kN, F_axial_fail_single_kN, axial_mode_single, k_axial_single };
             }, [doubleR, doublePlateW, doublePlateT, doubleConfig, doublePlane180, sigmaYield, sigmaFatigue, E_plate, doubleL, doubleEndCond]);
 
             const scale = 3.5;
@@ -1260,22 +1311,28 @@
                                         <h2 className="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">Plate Configuration</h2>
                                         <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl mb-4">
                                             <button 
+                                                onClick={() => setDoubleConfig('single')}
+                                                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${doubleConfig === 'single' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+                                            >
+                                                Single Plate
+                                            </button>
+                                            <button 
                                                 onClick={() => setDoubleConfig('180')}
-                                                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${doubleConfig === '180' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+                                                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${doubleConfig === '180' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
                                             >
                                                 180° Parallel
                                             </button>
                                             <button 
                                                 onClick={() => setDoubleConfig('90')}
-                                                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${doubleConfig === '90' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+                                                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${doubleConfig === '90' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
                                             >
                                                 90° Orthogonal
                                             </button>
                                         </div>
 
-                                        {doubleConfig === '180' && (
+                                        {(doubleConfig === '180' || doubleConfig === 'single') && (
                                             <div className="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800/50 rounded-xl animate-in slide-in-from-top-2">
-                                                <label className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-widest mb-2 block">180° Placement Plane</label>
+                                                <label className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-widest mb-2 block">{doubleConfig === 'single' ? 'Plate Placement Plane' : '180° Placement Plane'}</label>
                                                 <div className="flex bg-white dark:bg-slate-800 p-1 rounded-lg border border-blue-200 dark:border-slate-700/50">
                                                     <button 
                                                         onClick={() => setDoublePlane180('ML')}
@@ -1403,6 +1460,14 @@
                                                                 </g>
                                                             )}
                                                         </g>
+                                                    ) : doubleConfig === 'single' ? (
+                                                        <g>
+                                                            {doublePlane180 === 'ML' ? (
+                                                                <rect x={(doubleStats.d - doubleStats.t/2) * scale} y={(-doubleStats.w/2) * scale} width={doubleStats.t * scale} height={doubleStats.w * scale} className="fill-emerald-500 dark:fill-emerald-600" rx="3" />
+                                                            ) : (
+                                                                <rect x={(-doubleStats.w/2) * scale} y={(-doubleStats.d - doubleStats.t/2) * scale} width={doubleStats.w * scale} height={doubleStats.t * scale} className="fill-emerald-500 dark:fill-emerald-600" rx="3" />
+                                                            )}
+                                                        </g>
                                                     ) : (
                                                         <g>
                                                             <rect x={(doubleStats.d - doubleStats.t/2) * scale} y={(-doubleStats.w/2) * scale} width={doubleStats.t * scale} height={doubleStats.w * scale} className="fill-blue-500 dark:fill-blue-600" rx="3" />
@@ -1454,6 +1519,14 @@
                                                                     <rect x={(-doubleStats.w/2) * scale} y="-110" width={doubleStats.w * scale} height={220} className="fill-blue-500 dark:fill-blue-600 stroke-blue-700 dark:stroke-blue-500" rx="2" strokeWidth="1" fillOpacity="0.9" />
                                                                     <text x="0" y="0" fontSize="10" className="fill-white font-bold" textAnchor="middle">POSTERIOR PLATE HIDDEN</text>
                                                                 </g>
+                                                            )}
+                                                        </g>
+                                                    ) : doubleConfig === 'single' ? (
+                                                        <g>
+                                                            {doublePlane180 === 'ML' ? (
+                                                                <rect x={(doubleStats.d - doubleStats.t/2) * scale} y="-110" width={doubleStats.t * scale} height={220} className="fill-emerald-400 dark:fill-emerald-500 stroke-emerald-600 dark:stroke-emerald-400" rx="2" strokeWidth="1" />
+                                                            ) : (
+                                                                <rect x={(-doubleStats.w/2) * scale} y="-110" width={doubleStats.w * scale} height={220} className="fill-emerald-500 dark:fill-emerald-600 stroke-emerald-700 dark:stroke-emerald-500" rx="2" strokeWidth="1" fillOpacity="0.9" />
                                                             )}
                                                         </g>
                                                     ) : (
@@ -1787,11 +1860,11 @@
                                                         <InfoIcon /> The Working Length Paradox
                                                     </h4>
                                                     <p className="text-sm text-blue-900 dark:text-blue-200 leading-relaxed">
-                                                        It is a common misconception that increasing the working length (<Latex math="L" />) increases the lever arm acting on the plates. It does not. 
+                                                        Increasing the working length (<Latex math="L" />) makes the bridged construct more <strong>flexible</strong>. Under a constant axial load, a more flexible column deflects further, and that deflection <strong>adds to the geometric offset</strong> (<Latex math="e_{eff} = e + \\delta" />). The amplified offset multiplies the bending moment (<Latex math="M = P \\cdot e_{eff}" />), which lowers the load required to reach plate yield. So increasing <Latex math="L" /> <em>does</em> reduce the load to permanent bend &mdash; this is the P-Delta effect, and it is fully accounted for in the formula <Latex math={`P_{yield} = M_{max}/(e + M_{max}/P_{cr})`} />.
                                                         <br/><br/>
-                                                        In axial loading, the lever arm is the <strong>horizontal offset (<Latex math="e" />)</strong> from the central mechanical axis to the surface of the plate. Because this horizontal distance remains exactly the same regardless of how many empty screw holes you leave, the primary bending moment (<Latex math="M = P \\times e" />) is virtually unaffected by working length.
+                                                        <strong>Why is the observed decrease so small?</strong> Because for typical clinical working lengths the construct sits deep in the regime <Latex math={`P_{cr} \\gg M_{max}/e`} />, where the flexibility term <Latex math={`M_{max}/P_{cr}`} /> is one to two orders of magnitude smaller than the geometric offset <Latex math="e" />. The denominator is dominated by <Latex math="e" />, so doubling <Latex math="L" /> (which quarters <Latex math={`P_{cr}`} />) only nudges <Latex math={`P_{yield}`} /> down by a few percent. The math is correct &mdash; the sensitivity is genuinely small in this regime, and grows sharply only as <Latex math="L" /> approaches the buckling threshold (see the Sensitivity block in the Math Report).
                                                         <br/><br/>
-                                                        <strong>So what does Working Length do?</strong> It drastically lowers the <strong>Buckling limit</strong>. If <Latex math="L" /> gets too long, the structure shifts from failing predictably by plate yielding, to failing catastrophically via macroscopic buckling. (See Math Report for the analytical derivations).
+                                                        <strong>Where <Latex math="L" /> dominates:</strong> the buckling limit <Latex math={`P_{cr} = \\pi^2 E I / (KL)^2`} /> falls as <Latex math="1/L^2" />. If <Latex math="L" /> grows enough that <Latex math={`P_{cr}`} /> approaches the eccentric-yield load, the construct stops failing predictably by plate yielding and starts failing catastrophically by macroscopic buckling.
                                                     </p>
                                                 </div>
                                             </div>
